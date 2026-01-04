@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import StatusBar from "@/components/StatusBar";
 import QuickActions from "@/components/QuickActions";
 import RelayCard from "@/components/RelayCard";
 import { useToast } from "@/hooks/use-toast";
+import { subscribeToRelayStatus, setRelayStatus, initializeRelayData, type RelayStatus } from "@/lib/relayService";
 
 interface Relay {
   id: number;
@@ -13,59 +14,113 @@ interface Relay {
 }
 
 const initialRelays: Relay[] = [
-  { id: 1, name: "Relay 1", isOn: false, description: "Lampu Ruang Tamu" },
-  { id: 2, name: "Relay 2", isOn: true, description: "Pompa Air" },
-  { id: 3, name: "Relay 3", isOn: false, description: "AC Kamar" },
-  { id: 4, name: "Relay 4", isOn: false, description: "Lampu Taman" },
-  { id: 5, name: "Relay 5", isOn: true, description: "Kipas Exhaust" },
-  { id: 6, name: "Relay 6", isOn: false, description: "Heater" },
-  { id: 7, name: "Relay 7", isOn: false, description: "Motor Gate" },
-  { id: 8, name: "Relay 8", isOn: false, description: "CCTV Power" },
+  { id: 1, name: "Relay 1", isOn: false, description: "ESP32 GPIO 14" },
 ];
 
 const Index = () => {
   const [relays, setRelays] = useState<Relay[]>(initialRelays);
-  const [isConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [deviceInfo, setDeviceInfo] = useState<RelayStatus | null>(null);
   const { toast } = useToast();
 
-  const handleToggle = (id: number) => {
-    setRelays((prev) =>
-      prev.map((relay) =>
-        relay.id === id ? { ...relay, isOn: !relay.isOn } : relay
-      )
-    );
+  // Initialize Firebase and subscribe to changes
+  useEffect(() => {
+    // Initialize relay data
+    initializeRelayData();
 
+    // Subscribe to relay status changes
+    const unsubscribe = subscribeToRelayStatus((status, data) => {
+      setRelays((prev) =>
+        prev.map((relay) =>
+          relay.id === 1 ? { ...relay, isOn: status } : relay
+        )
+      );
+      setDeviceInfo(data);
+      setIsConnected(data.deviceOnline || false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const handleToggle = async (id: number) => {
     const relay = relays.find((r) => r.id === id);
-    if (relay) {
+    if (!relay) return;
+
+    const newStatus = !relay.isOn;
+
+    try {
+      // Update Firebase
+      await setRelayStatus(newStatus);
+      
+      // Optimistically update UI
+      setRelays((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, isOn: newStatus } : r
+        )
+      );
+
       toast({
-        title: relay.isOn ? "Relay Dimatikan" : "Relay Dinyalakan",
-        description: `${relay.name} (${relay.description}) ${relay.isOn ? "OFF" : "ON"}`,
+        title: newStatus ? "Relay Dinyalakan" : "Relay Dimatikan",
+        description: `${relay.name} (${relay.description}) ${newStatus ? "ON" : "OFF"}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mengubah status relay",
+        variant: "destructive",
+      });
+      console.error("Error toggling relay:", error);
+    }
+  };
+
+  const handleAllOn = async () => {
+    try {
+      await setRelayStatus(true);
+      toast({
+        title: "Relay Aktif",
+        description: "Relay telah dinyalakan",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal menyalakan relay",
+        variant: "destructive",
       });
     }
   };
 
-  const handleAllOn = () => {
-    setRelays((prev) => prev.map((relay) => ({ ...relay, isOn: true })));
-    toast({
-      title: "Semua Relay Aktif",
-      description: "Semua relay telah dinyalakan",
-    });
+  const handleAllOff = async () => {
+    try {
+      await setRelayStatus(false);
+      toast({
+        title: "Relay Mati",
+        description: "Relay telah dimatikan",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mematikan relay",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleAllOff = () => {
-    setRelays((prev) => prev.map((relay) => ({ ...relay, isOn: false })));
-    toast({
-      title: "Semua Relay Mati",
-      description: "Semua relay telah dimatikan",
-    });
-  };
-
-  const handleReset = () => {
-    setRelays(initialRelays);
-    toast({
-      title: "Reset Berhasil",
-      description: "Semua relay dikembalikan ke kondisi awal",
-    });
+  const handleReset = async () => {
+    try {
+      await setRelayStatus(false);
+      toast({
+        title: "Reset Berhasil",
+        description: "Relay dikembalikan ke kondisi OFF",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Gagal mereset relay",
+        variant: "destructive",
+      });
+    }
   };
 
   const activeRelays = relays.filter((r) => r.isOn).length;
@@ -80,6 +135,18 @@ const Index = () => {
           activeRelays={activeRelays}
           totalRelays={relays.length}
         />
+
+        {deviceInfo && deviceInfo.device && (
+          <div className="mb-6 p-4 bg-card rounded-lg border shadow-sm">
+            <h3 className="font-semibold mb-2">Device Information</h3>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>IP Address: <span className="font-mono">{deviceInfo.device.deviceIP}</span></div>
+              <div>RSSI: <span className="font-mono">{deviceInfo.device.rssi} dBm</span></div>
+              <div>Uptime: <span className="font-mono">{Math.floor(deviceInfo.device.uptime / 60)} min</span></div>
+              <div>Free Heap: <span className="font-mono">{Math.floor(deviceInfo.device.freeHeap / 1024)} KB</span></div>
+            </div>
+          </div>
+        )}
 
         <QuickActions
           onAllOn={handleAllOn}
@@ -102,7 +169,7 @@ const Index = () => {
 
         <footer className="mt-12 text-center text-xs text-muted-foreground">
           <p>RelayControl IoT Dashboard © 2026</p>
-          <p className="mt-1 font-mono">v1.0.0</p>
+          <p className="mt-1 font-mono">v1.0.0 - Firebase Edition</p>
         </footer>
       </main>
     </div>

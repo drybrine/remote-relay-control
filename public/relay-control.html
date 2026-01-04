@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kontrol Relay - Firebase</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+
+        .relay-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .relay-status {
+            display: inline-block;
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+        }
+
+        .relay-status.on {
+            background: #4ade80;
+            color: #166534;
+            box-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+        }
+
+        .relay-status.off {
+            background: #f87171;
+            color: #7f1d1d;
+            box-shadow: 0 0 20px rgba(248, 113, 113, 0.5);
+        }
+
+        .relay-icon {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-on {
+            background: #4ade80;
+            color: #166534;
+        }
+
+        .btn-on:hover {
+            background: #22c55e;
+        }
+
+        .btn-off {
+            background: #f87171;
+            color: #7f1d1d;
+        }
+
+        .btn-off:hover {
+            background: #ef4444;
+        }
+
+        .btn-refresh {
+            background: #3b82f6;
+            color: white;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .btn-refresh:hover {
+            background: #2563eb;
+        }
+
+        .info-card {
+            background: #f3f4f6;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        .info-value {
+            color: #1f2937;
+            font-weight: bold;
+        }
+
+        .device-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .device-status.online {
+            background: #4ade80;
+            box-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+        }
+
+        .device-status.offline {
+            background: #f87171;
+            box-shadow: 0 0 10px rgba(248, 113, 113, 0.5);
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            margin: 20px 0;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .success-message {
+            background: #d1fae5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .loading-pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎛️ Kontrol Relay</h1>
+        <p class="subtitle">Firebase Realtime Database via PHP</p>
+
+        <div class="relay-card">
+            <div class="relay-icon" id="relayIcon">⚡</div>
+            <div class="relay-status off" id="relayStatus">
+                <span id="statusText">LOADING...</span>
+            </div>
+            
+            <div class="control-buttons">
+                <button class="btn btn-on" onclick="setRelay(true)">
+                    ⚡ NYALAKAN
+                </button>
+                <button class="btn btn-off" onclick="setRelay(false)">
+                    🔌 MATIKAN
+                </button>
+            </div>
+            
+            <button class="btn btn-refresh" onclick="refreshStatus()">
+                🔄 REFRESH STATUS
+            </button>
+        </div>
+
+        <div class="info-card">
+            <div class="info-row">
+                <span class="info-label">Status Device:</span>
+                <span class="info-value">
+                    <span class="device-status offline" id="deviceStatusIndicator"></span>
+                    <span id="deviceStatus">Checking...</span>
+                </span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">IP Address:</span>
+                <span class="info-value" id="deviceIP">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Update Terakhir:</span>
+                <span class="info-value" id="lastUpdate">-</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Kontrol Terakhir:</span>
+                <span class="info-value" id="lastControl">-</span>
+            </div>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+        <div class="success-message" id="successMessage"></div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_URL = 'index.php'; // URL ke file PHP backend
+        let autoRefreshInterval = null;
+
+        /**
+         * Show message to user
+         */
+        function showMessage(message, type = 'success') {
+            const errorEl = document.getElementById('errorMessage');
+            const successEl = document.getElementById('successMessage');
+            
+            if (type === 'error') {
+                errorEl.textContent = message;
+                errorEl.style.display = 'block';
+                successEl.style.display = 'none';
+                setTimeout(() => {
+                    errorEl.style.display = 'none';
+                }, 5000);
+            } else {
+                successEl.textContent = message;
+                successEl.style.display = 'block';
+                errorEl.style.display = 'none';
+                setTimeout(() => {
+                    successEl.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        /**
+         * Format timestamp to readable date
+         */
+        function formatDate(timestamp) {
+            if (!timestamp) return '-';
+            
+            const date = new Date(timestamp);
+            return date.toLocaleString('id-ID', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        /**
+         * Update UI with relay status
+         */
+        function updateUI(data) {
+            const statusEl = document.getElementById('relayStatus');
+            const statusTextEl = document.getElementById('statusText');
+            const iconEl = document.getElementById('relayIcon');
+            const deviceStatusEl = document.getElementById('deviceStatus');
+            const deviceStatusIndicator = document.getElementById('deviceStatusIndicator');
+            const deviceIPEl = document.getElementById('deviceIP');
+            const lastUpdateEl = document.getElementById('lastUpdate');
+            const lastControlEl = document.getElementById('lastControl');
+
+            // Update relay status
+            if (data.status) {
+                statusEl.className = 'relay-status on';
+                statusTextEl.textContent = 'NYALA';
+                iconEl.textContent = '💡';
+            } else {
+                statusEl.className = 'relay-status off';
+                statusTextEl.textContent = 'MATI';
+                iconEl.textContent = '⚫';
+            }
+
+            // Update device status
+            const isOnline = data.deviceOnline || (data.device && data.device.deviceOnline);
+            if (isOnline) {
+                deviceStatusEl.textContent = 'Online';
+                deviceStatusIndicator.className = 'device-status online';
+            } else {
+                deviceStatusEl.textContent = 'Offline';
+                deviceStatusIndicator.className = 'device-status offline';
+            }
+
+            // Update device IP
+            const deviceIP = data.deviceIP || (data.device && data.device.deviceIP);
+            deviceIPEl.textContent = deviceIP || '-';
+
+            // Update timestamps
+            lastUpdateEl.textContent = formatDate(data.lastUpdate);
+            lastControlEl.textContent = data.lastControl ? formatDate(data.lastControl) : '-';
+        }
+
+        /**
+         * Get relay status from Firebase
+         */
+        async function getRelayStatus() {
+            try {
+                const response = await fetch(`${API_URL}?action=get`);
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    updateUI(result.data);
+                } else {
+                    showMessage('Gagal mendapatkan status relay: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * Set relay status
+         */
+        async function setRelay(status) {
+            try {
+                const formData = new FormData();
+                formData.append('status', status ? '1' : '0');
+
+                const response = await fetch(`${API_URL}?action=set`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(`Relay berhasil di${status ? 'nyalakan' : 'matikan'}!`, 'success');
+                    // Refresh status after a short delay
+                    setTimeout(getRelayStatus, 500);
+                } else {
+                    showMessage('Gagal mengubah status relay: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * Refresh relay status
+         */
+        function refreshStatus() {
+            const btn = event.target;
+            btn.classList.add('loading-pulse');
+            btn.textContent = '⏳ Refreshing...';
+            
+            getRelayStatus().finally(() => {
+                btn.classList.remove('loading-pulse');
+                btn.textContent = '🔄 REFRESH STATUS';
+            });
+        }
+
+        /**
+         * Start auto-refresh
+         */
+        function startAutoRefresh(interval = 3000) {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            autoRefreshInterval = setInterval(getRelayStatus, interval);
+        }
+
+        /**
+         * Stop auto-refresh
+         */
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            getRelayStatus();
+            startAutoRefresh(3000); // Auto-refresh every 3 seconds
+        });
+
+        // Stop auto-refresh when page is hidden
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else {
+                startAutoRefresh(3000);
+            }
+        });
+    </script>
+</body>
+</html>
